@@ -1,0 +1,35 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Train YOLO",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/train.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--model", "yolov8n.pt",
+                "--epochs", "10",
+                "--imgsz", "640"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Python: Evaluate checkpoint",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/evaluate.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--weights", "runs/detect/train/weights/best.pt"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
+    ]
+}
