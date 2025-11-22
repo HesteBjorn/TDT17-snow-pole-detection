@@ -34,6 +34,10 @@ def main():
     for key in ("metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)"):
         if key in results:
             print(f"{key}: {results[key]:.4f}")
+    duration = getattr(metrics, "eval_time_seconds", None)
+    if duration:
+        print(f"eval_time_seconds: {duration:.2f}")
+        print(f"eval_time_minutes: {duration/60:.2f}")
 
 
 if __name__ == "__main__":

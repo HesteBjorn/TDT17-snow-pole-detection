@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -20,7 +21,12 @@ def train_model(
         train_args.update(overrides)
 
     model = YOLO(cfg.model)
+    start = time.perf_counter()
     results = model.train(**train_args)
+    duration = time.perf_counter() - start
+    # Attach timing for downstream use
+    results.train_time_seconds = duration
+    print(f"[train] time: {duration:.2f}s ({duration/60:.2f} min)")
     return results
 
 
@@ -45,5 +51,9 @@ def evaluate_model(
     if device:
         val_args["device"] = device
 
+    start = time.perf_counter()
     metrics = model.val(**val_args)
+    duration = time.perf_counter() - start
+    metrics.eval_time_seconds = duration
+    print(f"[eval] time: {duration:.2f}s ({duration/60:.2f} min)")
     return metrics
