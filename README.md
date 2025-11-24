@@ -7,7 +7,8 @@ Lightweight project shell for experimenting with snow pole detection using the p
 - `src/` — minimal, hackable Python modules
   - `config.py` — central paths/hyperparameters
   - `data.py` — dataset helpers, label parsing, small stats utilities
-  - `training.py` — YOLO training/eval wrapper for fast experiments
+  - `training.py` — legacy helpers that call into the detector interface
+  - `predictors/` — backend-specific detectors with a common interface (`yolo.py`, `fasterrcnn.py`)
 - `scripts/` — thin CLIs for common tasks
   - `train.py` — run a training job from the CLI
   - `evaluate.py` — run evaluation on a saved checkpoint
@@ -29,12 +30,18 @@ pip install -r requirements.txt
 python scripts/train.py --model yolov8n.pt --epochs 50 --imgsz 640
 ```
 
-4) Evaluate a trained checkpoint:
+4) Train a COCO-pretrained Faster R-CNN (torchvision) instead of YOLO:
 ```bash
-python scripts/evaluate.py --weights runs/detect/train/weights/best.pt
+python scripts/train.py --backend fasterrcnn --tv-epochs 20 --tv-batch 4 --device cuda
 ```
 
-5) Explore data:
+5) Evaluate a trained checkpoint:
+```bash
+python scripts/evaluate.py --weights runs/detect/train/weights/best.pt              # YOLO
+python scripts/evaluate.py --backend fasterrcnn --weights runs/fasterrcnn_last.pth # Faster R-CNN loss eval
+```
+
+6) Explore data:
 - Open `notebooks/01_exploration.ipynb` for quick label counts, sample visuals, and split inspection.
 
 ## Notes

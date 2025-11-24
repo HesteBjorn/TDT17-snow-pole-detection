@@ -6,3 +6,6 @@ numpy>=1.26.0
 pyyaml>=6.0
 jupyter>=1.0.0
 seaborn>=0.13.0
+torch>=2.2.0
+torchvision>=0.17.0
+pycocotools>=2.0.7

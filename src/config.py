@@ -7,7 +7,7 @@ from typing import Optional
 class Paths:
     """Common filesystem locations."""
 
-    dataset_root: Path = Path("Poles2025/roadpoles_v1")
+    dataset_root: Path = Path("Poles2025/Road_poles_iPhone")
     runs_dir: Path = Path("runs")
     artifacts_dir: Path = Path("artifacts")
     data_yaml: Optional[Path] = None
@@ -61,3 +61,23 @@ def default_paths() -> Paths:
 
 def default_training() -> TrainingConfig:
     return TrainingConfig()
+
+
+@dataclass
+class TorchvisionDetectionConfig:
+    """Simple config for torchvision Faster R-CNN fine-tuning."""
+
+    backbone: str = "resnet50_fpn"
+    weights: str = "DEFAULT"  # torchvision enum name
+    epochs: int = 30
+    batch_size: int = 4
+    num_workers: int = 4
+    lr: float = 0.005
+    weight_decay: float = 1e-4
+    momentum: float = 0.9
+    device: Optional[str] = None  # e.g. "cuda", "cpu"
+    print_every: int = 10
+    save_last: bool = True
+
+    def asdict(self):
+        return asdict(self)
