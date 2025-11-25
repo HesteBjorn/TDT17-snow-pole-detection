@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 import yaml
@@ -74,8 +74,9 @@ def _label_path_for_image(image_path: Path, dataset_root: Path, images_dirname: 
     except ValueError:
         rel = image_path
     parts = list(rel.parts)
-    if parts and parts[0] == images_dirname:
-        parts[0] = labels_dirname
+    if images_dirname in parts:
+        idx = parts.index(images_dirname)
+        parts[idx] = labels_dirname
     return dataset_root / Path(*parts).with_suffix(".txt")
 
 
@@ -116,6 +117,55 @@ def load_annotations_from_filelist(
                     }
                 )
     return pd.DataFrame(rows)
+
+
+# Unified dataset handling
+DatasetSpec = Tuple[str, Path, Optional[Path]]
+
+
+def dataset_options() -> Dict[str, DatasetSpec]:
+    """
+    Return supported datasets.
+
+    Each entry: name -> (key, dataset_root, data_yaml_override)
+      key: 'v1' (folder splits) or 'iphone' (filelists)
+    """
+    return {
+        "v1": ("v1", Path("Poles2025/roadpoles_v1"), None),
+        "iphone": ("iphone", Path("Poles2025/Road_poles_iPhone"), None),
+    }
+
+
+def resolve_dataset(name: str) -> DatasetSpec:
+    opts = dataset_options()
+    try:
+        return opts[name]
+    except KeyError:
+        raise ValueError(f"Unknown dataset '{name}'. Options: {list(opts)}")
+
+
+def load_split_dataframe(split: str, dataset_key: str, dataset_root: Path) -> pd.DataFrame:
+    """
+    Load annotations for either dataset layout.
+
+    dataset_key:
+      - 'v1': expects dataset_root/{split}/images|labels
+      - 'iphone': expects filelists Train.txt/Validation.txt/Test.txt, with images/labels under dataset_root/images|labels
+    """
+    if dataset_key == "v1":
+        return load_annotations(split, dataset_root)
+    if dataset_key == "iphone":
+        list_map = {"train": "Train.txt", "valid": "Validation.txt", "val": "Validation.txt", "test": "Test.txt"}
+        list_file = dataset_root / list_map.get(split.lower(), "Validation.txt")
+        return load_annotations_from_filelist(list_file, dataset_root, images_dirname="images", labels_dirname="labels")
+    raise ValueError(f"Unsupported dataset_key: {dataset_key}")
+
+
+def infer_dataset_key(dataset_root: Path) -> str:
+    """Heuristic to infer dataset type."""
+    if (dataset_root / "Train.txt").exists():
+        return "iphone"
+    return "v1"
 
 
 def split_summary(dataset_root: Path) -> pd.DataFrame:

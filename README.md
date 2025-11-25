@@ -27,18 +27,18 @@ pip install -r requirements.txt
 
 3) Train a small model (Ultralytics YOLO):
 ```bash
-python scripts/train.py --model yolov8n.pt --epochs 50 --imgsz 640
+python scripts/train.py --dataset iphone --model yolov8n.pt --epochs 50 --imgsz 640
 ```
 
 4) Train a COCO-pretrained Faster R-CNN (torchvision) instead of YOLO:
 ```bash
-python scripts/train.py --backend fasterrcnn --tv-epochs 20 --tv-batch 4 --device cuda
+python scripts/train.py --backend fasterrcnn --dataset iphone --tv-epochs 20 --tv-batch 4 --device cuda
 ```
 
 5) Evaluate a trained checkpoint:
 ```bash
-python scripts/evaluate.py --weights runs/detect/train/weights/best.pt              # YOLO
-python scripts/evaluate.py --backend fasterrcnn --weights runs/fasterrcnn_last.pth # Faster R-CNN loss eval
+python scripts/evaluate.py --dataset iphone --weights runs/detect/train/weights/best.pt              # YOLO
+python scripts/evaluate.py --backend fasterrcnn --dataset iphone --weights runs/fasterrcnn_last.pth # Faster R-CNN
 ```
 
 6) Explore data:
@@ -48,3 +48,4 @@ python scripts/evaluate.py --backend fasterrcnn --weights runs/fasterrcnn_last.p
 - The repo ignores `Poles2025/` to avoid accidental commits of the dataset.
 - Metrics of interest: Precision, Recall, mAP@50, mAP@0.5:0.95 (Ultralytics reports these by default).
 - Keep iterations short: start with nano/tiny models, low epochs, then scale up as needed.
+- Dataset selector: use `--dataset v1` for `Poles2025/roadpoles_v1` (folder splits) or `--dataset iphone` for `Poles2025/Road_poles_iPhone` (filelists). Defaults to `iphone`.

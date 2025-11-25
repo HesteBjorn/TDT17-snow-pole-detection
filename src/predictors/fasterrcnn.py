@@ -11,7 +11,14 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.transforms import functional as F
 
 from ..config import TorchvisionDetectionConfig
-from ..data import _label_path_for_image, _normalize_rel_path, load_data_yaml
+from ..data import (
+    _label_path_for_image,
+    _normalize_rel_path,
+    infer_dataset_key,
+    IMG_EXTENSIONS,
+    load_data_yaml,
+    load_split_dataframe,
+)
 from .base import Detector, EvalResult, TrainResult
 
 
@@ -154,13 +161,33 @@ class FasterRCNNDetector(Detector):
         self.overrides = overrides or {}
 
     def _make_dataloaders(self):
-        data_cfg = load_data_yaml(self.paths.data_config)
         dataset_root = self.paths.dataset_root
-        train_list = dataset_root / data_cfg["Train"]
-        val_list = dataset_root / data_cfg["Validation"]
+        dataset_key = getattr(self.paths, "dataset_key", None) or infer_dataset_key(dataset_root)
 
-        train_ds = YoloListDataset(train_list, dataset_root, transforms=default_transforms(train=True))
-        val_ds = YoloListDataset(val_list, dataset_root, transforms=default_transforms(train=False))
+        if dataset_key == "iphone":
+            data_cfg = load_data_yaml(self.paths.data_config)
+            train_list = dataset_root / data_cfg.get("Train", "Train.txt")
+            val_list = dataset_root / data_cfg.get("Validation", "Validation.txt")
+            train_ds = YoloListDataset(train_list, dataset_root, transforms=default_transforms(train=True))
+            val_ds = YoloListDataset(val_list, dataset_root, transforms=default_transforms(train=False))
+        else:
+            # folder-based split; build list files on the fly
+            from tempfile import NamedTemporaryFile
+            from src.data import IMG_EXTENSIONS  # avoid circular import at top
+
+            def _list_from_split(split_name: str) -> Path:
+                images_dir = dataset_root / split_name / "images"
+                tmp = NamedTemporaryFile(mode="w", delete=False, suffix=".txt")
+                for ext in IMG_EXTENSIONS:
+                    for img_path in images_dir.glob(f"*{ext}"):
+                        tmp.write(str(img_path.resolve()) + "\n")
+                tmp.close()
+                return Path(tmp.name)
+
+            train_list = _list_from_split("train")
+            val_list = _list_from_split("valid")
+            train_ds = YoloListDataset(train_list, dataset_root, transforms=default_transforms(train=True))
+            val_ds = YoloListDataset(val_list, dataset_root, transforms=default_transforms(train=False))
 
         train_loader = DataLoader(
             train_ds,

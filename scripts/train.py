@@ -1,14 +1,15 @@
 import argparse
 from pathlib import Path
 
-from src.config import Paths, TorchvisionDetectionConfig, TrainingConfig
+from src.config import Paths, TorchvisionDetectionConfig, TrainingConfig, select_paths
 from src.predictors import get_detector
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a detector for snow pole detection.")
     parser.add_argument("--backend", choices=["yolo", "fasterrcnn"], default="yolo", help="Training backend.")
-    parser.add_argument("--data-root", type=Path, default=Path("Poles2025/Road_poles_iPhone"), help="Dataset root.")
+    parser.add_argument("--dataset", choices=["v1", "iphone"], default="iphone", help="Dataset preset to use.")
+    parser.add_argument("--data-root", type=Path, default=None, help="Optional dataset root override.")
     parser.add_argument("--data-yaml", type=Path, default=None, help="Override data.yaml location.")
     parser.add_argument("--device", type=str, default=None, help="Device string (e.g. '0', 'cuda', or 'cpu').")
 
@@ -34,7 +35,15 @@ def parse_args() -> argparse.Namespace:
 
 def main():
     args = parse_args()
-    paths = Paths(dataset_root=args.data_root, data_yaml=args.data_yaml)
+    base_paths = select_paths(args.dataset)
+    if args.data_root or args.data_yaml:
+        base_paths = Paths(
+            dataset_root=args.data_root or base_paths.dataset_root,
+            data_yaml=args.data_yaml or base_paths.data_yaml,
+            runs_dir=base_paths.runs_dir,
+            artifacts_dir=base_paths.artifacts_dir,
+        )
+    paths = base_paths
 
     cfg_builders = {
         "yolo": lambda a: TrainingConfig(

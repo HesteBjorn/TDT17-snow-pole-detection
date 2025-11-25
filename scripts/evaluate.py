@@ -1,15 +1,16 @@
 import argparse
 from pathlib import Path
 
-from src.config import Paths
+from src.config import Paths, select_paths
 from src.predictors import get_detector
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate a trained checkpoint.")
     parser.add_argument("--backend", choices=["yolo", "fasterrcnn"], default="yolo")
+    parser.add_argument("--dataset", choices=["v1", "iphone"], default="iphone")
     parser.add_argument("--weights", type=Path, required=True, help="Path to trained weights (e.g., best.pt or .pth).")
-    parser.add_argument("--data-root", type=Path, default=Path("Poles2025/Road_poles_iPhone"))
+    parser.add_argument("--data-root", type=Path, default=None)
     parser.add_argument("--data-yaml", type=Path, default=None)
     parser.add_argument("--imgsz", type=int, default=640, help="Only used by YOLO.")
     parser.add_argument("--batch", type=int, default=8, help="Only used by YOLO.")
@@ -20,7 +21,16 @@ def parse_args() -> argparse.Namespace:
 
 def main():
     args = parse_args()
-    paths = Paths(dataset_root=args.data_root, data_yaml=args.data_yaml)
+    base_paths = select_paths(args.dataset)
+    if args.data_root or args.data_yaml:
+        base_paths = Paths(
+            dataset_root=args.data_root or base_paths.dataset_root,
+            data_yaml=args.data_yaml or base_paths.data_yaml,
+            runs_dir=base_paths.runs_dir,
+            artifacts_dir=base_paths.artifacts_dir,
+        )
+    paths = base_paths
+
     detector = get_detector(args.backend, paths=paths)
     metrics = detector.evaluate(
         weights=args.weights,

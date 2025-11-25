@@ -2,12 +2,14 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Optional
 
+from .data import resolve_dataset
 
 @dataclass
 class Paths:
     """Common filesystem locations."""
 
     dataset_root: Path = Path("Poles2025/Road_poles_iPhone")
+    dataset_key: str = "iphone"  # 'v1' (folder splits) or 'iphone' (filelists)
     runs_dir: Path = Path("runs")
     artifacts_dir: Path = Path("artifacts")
     data_yaml: Optional[Path] = None
@@ -81,3 +83,16 @@ class TorchvisionDetectionConfig:
 
     def asdict(self):
         return asdict(self)
+
+
+def select_paths(dataset: str) -> Paths:
+    """
+    Build a Paths object for a named dataset ('v1' or 'iphone').
+    """
+    key, root, data_yaml = resolve_dataset(dataset)
+    repo_root = Path(__file__).resolve().parent.parent
+    base_root = root if root.is_absolute() else (repo_root / root)
+    data_yaml_abs = None
+    if data_yaml:
+        data_yaml_abs = data_yaml if data_yaml.is_absolute() else (base_root / data_yaml)
+    return Paths(dataset_root=base_root, data_yaml=data_yaml_abs, dataset_key=key)
