@@ -191,8 +191,8 @@ def copy_from_filelist(list_path: Path, src_root: Path, dst_root: Path, do_aug: 
         if img is None:
             continue
         stem = src_img.stem
-        # Snow
-        snow_img = apply_snow(img)
+        # Snow (slightly larger flakes for iPhone set by bumping max sizes)
+        snow_img = apply_snow(img, max_r=6, prob_large=0.08, max_large_r=14)
         snow_name = f"{stem}_snow{src_img.suffix}"
         snow_dst = dst_img.parent / snow_name
         cv2.imwrite(str(snow_dst), snow_img)
