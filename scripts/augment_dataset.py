@@ -1,15 +1,15 @@
 """
-Create an augmented copy of the Poles2025 dataset with extra train samples.
+Create an augmented copy of the Poles2025 datasets with extra train samples.
+
+Supports:
+- roadpoles_v1 (YOLO folder split)
+- Road_poles_iPhone (filelists + images/Train/train layout)
 
 Augmentations:
-- Horizontal flip (labels are adjusted).
-- Snow-like veil (photometric; labels unchanged).
+- Horizontal flip (labels adjusted)
+- Snow-like veil (photometric; labels unchanged)
 
-Output structure mirrors the original:
-- Poles2025_Aug/roadpoles_v1/{train,valid,test}/{images,labels}
-
-Val/test are copied unchanged; train contains originals plus augmented variants
-(*_flip.*, *_snow.*).
+Val/test are copied unchanged. Train contains originals plus *_flip and *_snow.
 """
 
 import argparse
@@ -20,6 +20,26 @@ import cv2
 import numpy as np
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG"}
+
+
+def label_path_for_image(image_path: Path, root: Path, images_dirname: str = "images", labels_dirname: str = "labels") -> Path:
+    """Infer label path by swapping images_dirname with labels_dirname and .txt suffix."""
+    try:
+        rel = image_path.relative_to(root)
+    except ValueError:
+        rel = image_path
+    parts = list(rel.parts)
+    if parts and parts[0] == images_dirname:
+        parts[0] = labels_dirname
+    return root / Path(*parts).with_suffix(".txt")
+
+
+def normalize_rel(path_str: str) -> Path:
+    """Strip leading 'data/' if present."""
+    p = Path(path_str.strip())
+    if p.parts and p.parts[0] == "data":
+        p = Path(*p.parts[1:])
+    return p
 
 
 def apply_snow(
@@ -78,6 +98,9 @@ def flip_labels(label_path: Path) -> str:
     return "\n".join(lines_out)
 
 
+# --- YOLO folder-style (roadpoles_v1) helpers ---
+
+
 def copy_split(src_root: Path, dst_root: Path, split: str):
     """Copy non-train splits unchanged (only existing subfolders)."""
     for sub in ["images", "labels"]:
@@ -91,7 +114,7 @@ def copy_split(src_root: Path, dst_root: Path, split: str):
                 shutil.copy2(path, dst_dir / path.name)
 
 
-def augment_train(src_root: Path, dst_root: Path):
+def augment_train_yolo(src_root: Path, dst_root: Path):
     src_images = src_root / "train" / "images"
     src_labels = src_root / "train" / "labels"
     dst_images = dst_root / "train" / "images"
@@ -111,10 +134,11 @@ def augment_train(src_root: Path, dst_root: Path):
         shutil.copy2(img_path, dst_images / img_path.name)
         shutil.copy2(label_path, dst_labels / label_path.name)
 
-        # Snow
         img = cv2.imread(str(img_path))
         if img is None:
             continue
+
+        # Snow
         snow_img = apply_snow(img)
         snow_name = f"{stem}_snow{img_path.suffix}"
         cv2.imwrite(str(dst_images / snow_name), snow_img)
@@ -129,13 +153,89 @@ def augment_train(src_root: Path, dst_root: Path):
             f.write(flipped_labels)
 
 
+# --- iPhone filelist-style helpers ---
+
+
+def copy_from_filelist(list_path: Path, src_root: Path, dst_root: Path, do_aug: bool = False) -> None:
+    """
+    Copy images (and labels if present) from a filelist.
+    If do_aug=True, add snow + flip variants with updated labels and add them to the list.
+    Writes a new list file in dst_root with absolute paths for the copied (and augmented) images.
+    """
+    entries = []
+    with open(list_path, "r", encoding="utf-8") as f:
+        entries = [line.strip() for line in f if line.strip()]
+
+    dst_entries = []
+    for line in entries:
+        rel = normalize_rel(line)
+        src_img = src_root / rel
+        if src_img.suffix not in IMG_EXTS or not src_img.exists():
+            continue
+        dst_img = dst_root / rel
+        dst_img.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_img, dst_img)
+
+        src_label = label_path_for_image(src_img, src_root, images_dirname="images", labels_dirname="labels")
+        dst_label = label_path_for_image(dst_img, dst_root, images_dirname="images", labels_dirname="labels")
+        if src_label.exists():
+            dst_label.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_label, dst_label)
+
+        dst_entries.append(str(dst_img.resolve()))
+
+        if not do_aug:
+            continue
+
+        img = cv2.imread(str(src_img))
+        if img is None:
+            continue
+        stem = src_img.stem
+        # Snow
+        snow_img = apply_snow(img)
+        snow_name = f"{stem}_snow{src_img.suffix}"
+        snow_dst = dst_img.parent / snow_name
+        cv2.imwrite(str(snow_dst), snow_img)
+        if src_label.exists():
+            snow_label = label_path_for_image(snow_dst, dst_root, images_dirname="images", labels_dirname="labels")
+            snow_label.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_label, snow_label)
+        dst_entries.append(str(snow_dst.resolve()))
+
+        # Flip
+        flip_img = cv2.flip(img, 1)
+        flip_name = f"{stem}_flip{src_img.suffix}"
+        flip_dst = dst_img.parent / flip_name
+        cv2.imwrite(str(flip_dst), flip_img)
+        if src_label.exists():
+            flipped = flip_labels(src_label)
+            flip_label = label_path_for_image(flip_dst, dst_root, images_dirname="images", labels_dirname="labels")
+            flip_label.parent.mkdir(parents=True, exist_ok=True)
+            with open(flip_label, "w", encoding="utf-8") as f:
+                f.write(flipped)
+        dst_entries.append(str(flip_dst.resolve()))
+
+    # Write new list file with absolute paths
+    dst_list = dst_root / list_path.name
+    with open(dst_list, "w", encoding="utf-8") as f:
+        f.write("\n".join(dst_entries))
+
+
+def detect_layout(src_root: Path) -> str:
+    if (src_root / "Train.txt").exists():
+        return "iphone"
+    if (src_root / "train").exists() and (src_root / "train" / "images").exists():
+        return "yolo"
+    raise SystemExit(f"Unrecognized dataset layout at {src_root}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Create augmented copy of Poles2025 with snow+flip.")
     parser.add_argument(
         "--src",
         type=Path,
         default=Path("Poles2025/roadpoles_v1"),
-        help="Source dataset root (YOLO format).",
+        help="Source dataset root.",
     )
     parser.add_argument(
         "--dst",
@@ -149,16 +249,26 @@ def main():
     if args.dst.exists() and not args.force:
         raise SystemExit(f"Destination {args.dst} exists. Use --force to write into it.")
 
-    # Copy data.yaml as-is
+    layout = detect_layout(args.src)
     args.dst.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(args.src / "data.yaml", args.dst / "data.yaml")
+    if (args.src / "data.yaml").exists():
+        shutil.copy2(args.src / "data.yaml", args.dst / "data.yaml")
 
-    # Copy val/test unchanged (no augmentation)
-    for split in ["valid", "test"]:
-        copy_split(args.src, args.dst, split)
+    if layout == "yolo":
+        # Copy val/test unchanged
+        for split in ["valid", "test"]:
+            copy_split(args.src, args.dst, split)
+        augment_train_yolo(args.src, args.dst)
+    else:
+        # iPhone filelist style
+        # Copy val/test lists and assets without aug
+        for split_file in ["Validation.txt", "Test.txt"]:
+            if (args.src / split_file).exists():
+                copy_from_filelist(args.src / split_file, args.src, args.dst, do_aug=False)
+        # Train with aug
+        if (args.src / "Train.txt").exists():
+            copy_from_filelist(args.src / "Train.txt", args.src, args.dst, do_aug=True)
 
-    # Augment train
-    augment_train(args.src, args.dst)
     print(f"Augmented dataset written to {args.dst}")
 
 
